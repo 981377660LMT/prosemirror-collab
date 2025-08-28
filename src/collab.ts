@@ -1,17 +1,17 @@
-import {Plugin, PluginKey, TextSelection, EditorState, Transaction} from "prosemirror-state"
-import {Step, Transform} from "prosemirror-transform"
+import { Plugin, PluginKey, TextSelection, EditorState, Transaction } from 'prosemirror-state'
+import { Step, Transform } from 'prosemirror-transform'
 
 class Rebaseable {
-  constructor(
-    readonly step: Step,
-    readonly inverted: Step,
-    readonly origin: Transform
-  ) {}
+  constructor(readonly step: Step, readonly inverted: Step, readonly origin: Transform) {}
 }
 
 /// Undo a given set of steps, apply a set of other steps, and then
 /// redo them @internal
-export function rebaseSteps(steps: readonly Rebaseable[], over: readonly Step[], transform: Transform) {
+export function rebaseSteps(
+  steps: readonly Rebaseable[],
+  over: readonly Step[],
+  transform: Transform
+) {
   for (let i = steps.length - 1; i >= 0; i--) transform.step(steps[i].inverted)
   for (let i = 0; i < over.length; i++) transform.step(over[i])
   let result = []
@@ -20,7 +20,13 @@ export function rebaseSteps(steps: readonly Rebaseable[], over: readonly Step[],
     mapFrom--
     if (mapped && !transform.maybeStep(mapped).failed) {
       transform.mapping.setMirror(mapFrom, transform.steps.length - 1)
-      result.push(new Rebaseable(mapped, mapped.invert(transform.docs[transform.docs.length - 1]), steps[i].origin))
+      result.push(
+        new Rebaseable(
+          mapped,
+          mapped.invert(transform.docs[transform.docs.length - 1]),
+          steps[i].origin
+        )
+      )
     }
   }
   return result
@@ -47,13 +53,13 @@ class CollabState {
 function unconfirmedFrom(transform: Transform) {
   let result = []
   for (let i = 0; i < transform.steps.length; i++)
-    result.push(new Rebaseable(transform.steps[i],
-                               transform.steps[i].invert(transform.docs[i]),
-                               transform))
+    result.push(
+      new Rebaseable(transform.steps[i], transform.steps[i].invert(transform.docs[i]), transform)
+    )
   return result
 }
 
-const collabKey = new PluginKey("collab")
+const collabKey = new PluginKey('collab')
 
 type CollabConfig = {
   /// The starting version number of the collaborative editing.
@@ -70,7 +76,7 @@ type CollabConfig = {
 export function collab(config: CollabConfig = {}): Plugin {
   let conf: Required<CollabConfig> = {
     version: config.version || 0,
-    clientID: config.clientID == null ? Math.floor(Math.random() * 0xFFFFFFFF) : config.clientID
+    clientID: config.clientID == null ? Math.floor(Math.random() * 0xffffffff) : config.clientID
   }
 
   return new Plugin({
@@ -80,8 +86,7 @@ export function collab(config: CollabConfig = {}): Plugin {
       init: () => new CollabState(conf.version, []),
       apply(tr, collab) {
         let newState = tr.getMeta(collabKey)
-        if (newState)
-          return newState
+        if (newState) return newState
         if (tr.docChanged)
           return new CollabState(collab.version, collab.unconfirmed.concat(unconfirmedFrom(tr)))
         return collab
@@ -129,8 +134,7 @@ export function receiveTransaction(
   steps = ours ? steps.slice(ours) : steps
 
   // If all steps originated with us, we're done.
-  if (!steps.length)
-    return state.tr.setMeta(collabKey, new CollabState(version, unconfirmed))
+  if (!steps.length) return state.tr.setMeta(collabKey, new CollabState(version, unconfirmed))
 
   let nUnconfirmed = unconfirmed.length
   let tr = state.tr
@@ -143,11 +147,19 @@ export function receiveTransaction(
 
   let newCollabState = new CollabState(version, unconfirmed)
   if (options && options.mapSelectionBackward && state.selection instanceof TextSelection) {
-    tr.setSelection(TextSelection.between(tr.doc.resolve(tr.mapping.map(state.selection.anchor, -1)),
-                                          tr.doc.resolve(tr.mapping.map(state.selection.head, -1)), -1))
+    tr.setSelection(
+      TextSelection.between(
+        tr.doc.resolve(tr.mapping.map(state.selection.anchor, -1)),
+        tr.doc.resolve(tr.mapping.map(state.selection.head, -1)),
+        -1
+      )
+    )
     ;(tr as any).updated &= ~1
   }
-  return tr.setMeta("rebased", nUnconfirmed).setMeta("addToHistory", false).setMeta(collabKey, newCollabState)
+  return tr
+    .setMeta('rebased', nUnconfirmed)
+    .setMeta('addToHistory', false)
+    .setMeta(collabKey, newCollabState)
 }
 
 /// Provides data describing the editor's unconfirmed steps, which need
@@ -160,9 +172,9 @@ export function receiveTransaction(
 /// rebased, whereas the origin transactions are still the old,
 /// unchanged objects.
 export function sendableSteps(state: EditorState): {
-  version: number,
-  steps: readonly Step[],
-  clientID: number | string,
+  version: number
+  steps: readonly Step[]
+  clientID: number | string
   origins: readonly Transaction[]
 } | null {
   let collabState = collabKey.getState(state) as CollabState
@@ -172,7 +184,10 @@ export function sendableSteps(state: EditorState): {
     steps: collabState.unconfirmed.map(s => s.step),
     clientID: (collabKey.get(state)!.spec as any).config.clientID,
     get origins() {
-      return (this as any)._origins || ((this as any)._origins = collabState.unconfirmed.map(s => s.origin))
+      return (
+        (this as any)._origins ||
+        ((this as any)._origins = collabState.unconfirmed.map(s => s.origin))
+      )
     }
   }
 }
