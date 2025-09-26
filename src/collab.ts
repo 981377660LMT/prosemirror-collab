@@ -85,11 +85,12 @@ export function collab(config: CollabConfig = {}): Plugin {
     state: {
       init: () => new CollabState(conf.version, []),
       apply(tr, collab) {
-        let newState = tr.getMeta(collabKey)
+        let newState = tr.getMeta(collabKey) // 1. 优先处理来自 receiveTransaction 的新状态
         if (newState) return newState
         if (tr.docChanged)
+          // 2. 如果是本地用户修改
           return new CollabState(collab.version, collab.unconfirmed.concat(unconfirmedFrom(tr)))
-        return collab
+        return collab // 3. 如果没有变化，保持原样
       }
     },
 
